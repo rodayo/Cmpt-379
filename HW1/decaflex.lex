@@ -34,7 +34,7 @@
 #define		T_RETURN					48
 #define		T_NULL						44
 
-//3 Basic types
+//3 Basic typesgithub
 #define		T_BOOLTYPE				12
 #define		T_INTTYPE					31
 #define		T_STRINGTYPE			53
@@ -80,6 +80,10 @@ extern "C"
 }
 
 using namespace std;
+
+int pos;
+int line;
+string str_const;
 %}
 
 T_AND 				&&
@@ -104,16 +108,24 @@ T_INTCONSTANT [0-9]+|0x[0-9a-fA-F]+
 %s TYPE_INST
 %%
 
-[ \n]* { return T_WHITESPACE; }
-\( { return T_LPAREN; }
-\) { return T_RPAREN; }
-\{ { return T_LCB; }
-\} { return T_RCB; }
-\[ { return T_LSB; }
-\] { return T_RSB; }
-;	 { return T_SEMICOLON; }
+[ \n]* { 
+	if (*yytext = '\n')
+		pos = 0;
+	else
+		pos += yyleng;
+		
+	return T_WHITESPACE; 
+}
+\( { pos++; return T_LPAREN; }
+\) { pos++; return T_RPAREN; }
+\{ { pos++; return T_LCB; }
+\} { pos++; return T_RCB; }
+\[ { pos++; return T_LSB; }
+\] { pos++; return T_RSB; }
+;	 { pos++; return T_SEMICOLON; }
 
 extern {
+	pos += yyleng;
 	return T_EXTERN;
 }
 
@@ -123,14 +135,20 @@ extern {
 	
 	string tok_type (yytext);
 	if (tok_type.compare("void") == 0)
+	{
+		pos += yyleng;
 		return T_VOID;
+	}
 	else if (tok_type.compare("int") == 0)
+	{
+		pos += yyleng;
 		return T_INTTYPE;
+	}
 	else if (tok_type.compare("bool") == 0)
+	{
+		pos += yyleng;
 		return T_BOOLTYPE;
-	else
-		return -1;
-
+	}
 }
 
 	/*
@@ -139,14 +157,58 @@ extern {
 	*/
 <TYPE_INST>[a-zA-Z_]+[a-zA-Z0-9_]* {
 	BEGIN 0;
+	pos += yyleng;
 	return T_ID;
 }
 
+\" {
+	BEGIN STR_LITERAL;
+}
+
+<STR_LITERAL>[^\\]\" {
+	BEGIN 0;
+	return T_STRINGCONSTANT;
+}
+
+<STR_LITERAL>([^\"].)* {
+	string str_const (yytext);
+	/*If the user is trying to use an escape sequence make sure they're doing it right
+		and scald them accordingly.
+	*/
+	cout << yytext << endl;
+	for (int i = 0; i < str_const.length(); i++)
+	{
+		//TODO: for some reason a '\' is detected even when it's not present at all
+		if (str_const[i] = '\\')
+		{
+			cout << "char " << i << " " << str_const[i] << endl;
+			if(string("tvrafb\\\"").find(str_const[i + 1]) == string::npos)
+			{
+				cerr << "Error: Unrecognized escape sequence in string constant" << endl;
+				cerr << "Lexical error: line " << yylineno << ", position " << (pos + i) << endl;
+				yywrap();
+			}
+		}
+		else if (str_const[i] == '\n')
+		{
+			cerr << "Error: Newline in string constant" << endl;
+			cerr << "Lexical error: line " << yylineno << ", position " << pos << endl;
+			yywrap();
+		}
+		else
+		{
+			str_const += *yytext;
+		}
+	}
+}
+
+
 	/* The state conditions basically mean that an identifier
-		 should be expected next
+		 should be expected next\
 	*/
 <INITIAL>class {
 	BEGIN TYPE_INST;
+	pos += yyleng;
 	return T_CLASS;
 }
 
@@ -154,6 +216,7 @@ extern {
 
 int main()
 {
+	pos = line = 1;
 	int token;
 	while (token = yylex())
 	{
@@ -164,12 +227,13 @@ int main()
 				while(*yytext != '\0')
 				{
 					if (*yytext == '\n')
-						cout << "\\n" << endl;
+						cout << "\\n";
 					else 
-						cout << " " << endl;
+						cout << " ";
 					
 					*yytext++;
 				}
+				cout << endl;
 				break;
 			case T_EXTERN:
 				cout << "T_EXTERN " << yytext << endl;
@@ -194,6 +258,10 @@ int main()
 				break;
 			case T_SEMICOLON:
 				cout << "T_SEMICOLON ;" << endl;
+				break;
+			case T_STRINGCONSTANT:
+				cout << "T_STRINGCONSTANT " << str_const << endl;
+				str_const.clear();
 				break;
 		}
 	}

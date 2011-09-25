@@ -1,0 +1,4 @@
+
+extern void print_int(int);
+
+"string cosntat"
