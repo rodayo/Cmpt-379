@@ -97,8 +97,10 @@ H			[a-fA-F0-9]
 %s TYPE_INST
 %%
 
-\/\/.*$ {
+\/\/.*\n {
 	str_comment = string(yytext);
+	str_comment.erase(str_comment.end() - 1);
+	
 	glo_line++;
 	return T_COMMENT;
 }
@@ -149,7 +151,7 @@ extern {
 	return T_EXTERN;
 }
 
-(class|int|void|bool) {
+(class|int|void|bool|string) {
 	//A variable is being instantiated and so an identifier should be expected
 	BEGIN TYPE_INST;
 	glo_pos += yyleng;
@@ -157,6 +159,8 @@ extern {
 	
 	if (tok_type.compare("void") == 0)
 		return T_VOID;
+	else if (tok_type.compare("string") == 0)
+		return T_STRINGTYPE;
 	else if (tok_type.compare("int") == 0)
 		return T_INTTYPE;
 	else if (tok_type.compare("bool") == 0)
@@ -185,7 +189,7 @@ extern {
 		if (str_const[i] == '\\' && string("tvrnafb\\\"").find(str_const[i + 1]) == string::npos)
 		{
 			cerr << "Error: Unrecognized escape sequence in string constant" << endl;
-			cerr << "Lexical error: line " << glo_line << ", position " << (glo_pos + i) <<  " char: " << str_const[i] << endl;
+			cerr << "Lexical error: line " << glo_line << ", position " << (glo_pos + i) << endl;
 		}
 		if (str_const[i] == '\n')
 		{
@@ -197,17 +201,45 @@ extern {
 	return T_STRINGCONSTANT;
 }
 
+\".*(\"|\\\").*\" {
+	cerr << "Error: unterminated string constant" << endl;
+	cerr << "Lexical error: line " << glo_line << ", position " << glo_pos << endl;
+}
+
+'(\\.|[^\\'])*' {
+	string strchar = string(yytext);
+	strchar = strchar.substr(1, strchar.length() - 2);
+
+	if (strchar.length() > 1 && strchar[0] != '\\')
+	{
+		cerr << "Error: char constant length is greater than one" << endl;
+		cerr << "Lexical error: line " << glo_line << ", position " << glo_pos << endl;
+	}
+	else if (strchar[0] == '\\' && string("tvrnafb\\\"").find(strchar[1]) == string::npos)
+	{
+		cerr << "Error: Unrecognized escape sequence in character constant" << endl;
+		cerr << "Lexical error: line " << glo_line << ", position " << glo_pos << endl;
+	}
+	else if (strchar.length() == 0)
+	{
+		cerr << "Error: char constant has zero width" << endl;
+		cerr << "Lexical error: line " << glo_line << ", position " << glo_pos << endl;
+	}
+	return T_CHARCONSTANT;
+}
+
 (0[xX]){H}{1,8} {
 	glo_pos += yyleng;
 	return T_INTCONSTANT;
 }
+
 {D}+ {
 	glo_pos += yyleng;
 	double num = atol(yytext);
 	
 	if (num > 2147483647 || num < -2147483647)
 	{
-		cerr << "Error: integer value of range" << endl;
+		cerr << "Error: integer value out of range" << endl;
 		cerr << "Lexical error: line " << glo_line << ", position " << glo_pos - yyleng + 1 << endl;
 	}
 	
@@ -249,6 +281,9 @@ int main()
 				break;
 			case T_VOID:
 				cout << "T_VOID " << yytext << endl;
+				break;
+			case T_STRINGTYPE:
+				cout << "T_STRINGTYPE " << yytext << endl;
 				break;
 			case T_INTTYPE:
 				cout << "T_INTTYPE " << yytext << endl;
@@ -362,26 +397,15 @@ int main()
 				cout << "T_STRINGCONSTANT " << str_const << endl;
 				str_const.clear();
 				break;
+			case T_CHARCONSTANT:
+				cout << "T_CHARCONSTANT " << yytext << endl;
+				break;
 			case T_INTCONSTANT:
 				cout << "T_INTCONSTANT " << yytext << endl;
 				break;
 		}
 	}
 	return 0;
-}
-
-void count()
-{
-	for (int i = 0; yytext[i] != '\0'; i++)
-	{
-		if (yytext[i] = '\n')
-		{
-			glo_pos = 0;
-			glo_line++;
-		}
-		else
-			glo_pos += yyleng;
-	}
 }
 
 
