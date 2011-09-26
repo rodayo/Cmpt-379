@@ -81,162 +81,171 @@ extern "C"
 
 using namespace std;
 
-int pos;
-int line;
+int glo_pos;
+int glo_line;
+
 string str_const;
+string str_comment;
+
 %}
 
-T_AND 				&&
-T_OR					||
-T_NOT					!
-T_TRUE				true
-T_FALSE				false
-
-T_EQ					==
-T_NEQ					!=
-T_GEQ					>=
-T_LEQ					<=
-T_GT					>
-T_LT					<
-
-T_ASSIGN			=
-T_INTTYPE			int
-
-T_INTCONSTANT [0-9]+|0x[0-9a-fA-F]+
+D			[0-9]
+L			[a-zA-Z_]
+H			[a-fA-F0-9]
 
 %s STR_LITERAL
 %s TYPE_INST
 %%
 
-[ \n]* { 
-	if (*yytext = '\n')
-		pos = 0;
-	else
-		pos += yyleng;
-		
-	return T_WHITESPACE; 
+\/\/.*$ {
+	str_comment = string(yytext);
+	glo_line++;
+	return T_COMMENT;
 }
-\( { pos++; return T_LPAREN; }
-\) { pos++; return T_RPAREN; }
-\{ { pos++; return T_LCB; }
-\} { pos++; return T_RCB; }
-\[ { pos++; return T_LSB; }
-\] { pos++; return T_RSB; }
-;	 { pos++; return T_SEMICOLON; }
+
+\( { glo_pos += yyleng; return T_LPAREN; }
+\) { glo_pos += yyleng; return T_RPAREN; }
+\{ { glo_pos += yyleng; return T_LCB; }
+\} { glo_pos += yyleng; return T_RCB; }
+\[ { glo_pos += yyleng; return T_LSB; }
+\] { glo_pos += yyleng; return T_RSB; }
+,  { glo_pos += yyleng; return T_COMMA; }
+;	 { glo_pos += yyleng; return T_SEMICOLON; }
+
+"="  { glo_pos += yyleng; return T_ASSIGN; }
+"+" { glo_pos += yyleng; return T_PLUS; }
+"-"  { glo_pos += yyleng; return T_MINUS; }
+"%"  { glo_pos += yyleng; return T_MOD; }
+"*" { glo_pos += yyleng; return T_MULT; }
+"/"  { glo_pos += yyleng; return T_DIV; }
+"<<" { glo_pos += yyleng; return T_LEFTSHIFT; }
+">>" { glo_pos += yyleng; return T_RIGHTSHIFT; }
+
+"==" { glo_pos += yyleng; return T_EQ; }
+"!=" { glo_pos += yyleng; return T_NEQ; }
+">=" { glo_pos += yyleng; return T_GEQ; }
+"<=" { glo_pos += yyleng; return T_LEQ; }
+">"  { glo_pos += yyleng; return T_GT; }
+"<"  { glo_pos += yyleng; return T_LT; }
+
+"&&" { glo_pos += yyleng; return T_AND; }
+"||" { glo_pos += yyleng; return T_OR; }
+"!"  { glo_pos += yyleng; return T_NOT; }
+true { glo_pos += yyleng; return T_TRUE; }
+false { glo_pos += yyleng; return T_FALSE; }
+
+while { glo_pos += yyleng; return T_WHILE; }
+for { glo_pos += yyleng; return T_FOR; }
+if { glo_pos += yyleng; return T_IF; }
+else { glo_pos += yyleng; return T_ELSE; }
+
+
+continue { glo_pos += yyleng; return T_CONTINUE; }
+return { glo_pos += yyleng; return T_RETURN; }
+extends { glo_pos += yyleng; return T_EXTENDS; }
 
 extern {
-	pos += yyleng;
+	glo_pos += yyleng;
 	return T_EXTERN;
 }
 
-(int|void|bool) {
+(class|int|void|bool) {
 	//A variable is being instantiated and so an identifier should be expected
 	BEGIN TYPE_INST;
-	
+	glo_pos += yyleng;
 	string tok_type (yytext);
+	
 	if (tok_type.compare("void") == 0)
-	{
-		pos += yyleng;
 		return T_VOID;
-	}
 	else if (tok_type.compare("int") == 0)
-	{
-		pos += yyleng;
 		return T_INTTYPE;
-	}
 	else if (tok_type.compare("bool") == 0)
-	{
-		pos += yyleng;
 		return T_BOOLTYPE;
-	}
+	else if (tok_type.compare("class") == 0)
+		return T_CLASS;
 }
 
 	/*
 		The state conditions basically mean that an IDENTIFIER can be used for
 		a extern prototype, a class instantiation or a type instantiation.
 	*/
-<TYPE_INST>[a-zA-Z_]+[a-zA-Z0-9_]* {
+[a-zA-Z_]+[a-zA-Z0-9_]* {
 	BEGIN 0;
-	pos += yyleng;
+	glo_pos += yyleng;
 	return T_ID;
 }
 
-\" {
-	BEGIN STR_LITERAL;
-}
-
-<STR_LITERAL>[^\\]\" {
-	BEGIN 0;
+\"(\\.|[^\\"]|\n)*\" {
+	str_const = string(yytext);
+	str_const = str_const.substr(1, str_const.length() - 2);
+	
+	//Find any invalid escape sequences
+	for (int i = 0; i < str_const.length(); i++)
+	{
+		if (str_const[i] == '\\' && string("tvrnafb\\\"").find(str_const[i + 1]) == string::npos)
+		{
+			cerr << "Error: Unrecognized escape sequence in string constant" << endl;
+			cerr << "Lexical error: line " << glo_line << ", position " << (glo_pos + i) <<  " char: " << str_const[i] << endl;
+		}
+		if (str_const[i] == '\n')
+		{
+			glo_line++;
+			cerr << "Error: Newline in string constant" << endl;
+			cerr << "Lexical error: line " << glo_line << ", position " << glo_pos + i << endl;
+		}
+	}
 	return T_STRINGCONSTANT;
 }
 
-<STR_LITERAL>([^\"].)* {
-	string str_const (yytext);
-	/*If the user is trying to use an escape sequence make sure they're doing it right
-		and scald them accordingly.
-	*/
-	cout << yytext << endl;
-	for (int i = 0; i < str_const.length(); i++)
+(0[xX]){H}{1,8} {
+	glo_pos += yyleng;
+	return T_INTCONSTANT;
+}
+{D}+ {
+	glo_pos += yyleng;
+	double num = atol(yytext);
+	
+	if (num > 2147483647 || num < -2147483647)
 	{
-		//TODO: for some reason a '\' is detected even when it's not present at all
-		if (str_const[i] = '\\')
-		{
-			cout << "char " << i << " " << str_const[i] << endl;
-			if(string("tvrafb\\\"").find(str_const[i + 1]) == string::npos)
-			{
-				cerr << "Error: Unrecognized escape sequence in string constant" << endl;
-				cerr << "Lexical error: line " << yylineno << ", position " << (pos + i) << endl;
-				yywrap();
-			}
-		}
-		else if (str_const[i] == '\n')
-		{
-			cerr << "Error: Newline in string constant" << endl;
-			cerr << "Lexical error: line " << yylineno << ", position " << pos << endl;
-			yywrap();
-		}
-		else
-		{
-			str_const += *yytext;
-		}
+		cerr << "Error: integer value of range" << endl;
+		cerr << "Lexical error: line " << glo_line << ", position " << glo_pos - yyleng + 1 << endl;
 	}
+	
+	return T_INTCONSTANT;
 }
 
+[ \n]* { 
+	string strws = string(yytext);
+	cout << "T_WHITESPACE ";
 
-	/* The state conditions basically mean that an identifier
-		 should be expected next\
-	*/
-<INITIAL>class {
-	BEGIN TYPE_INST;
-	pos += yyleng;
-	return T_CLASS;
+	for (int i = 0; i < strws.length(); i++)
+	{
+		if (strws[i] == '\n')
+		{
+			cout << "\\n";
+			glo_line++;
+		}
+		else 
+			cout << strws[i];
+	}
+	cout << endl;
 }
 
 %%
 
 int main()
 {
-	pos = line = 1;
+	glo_pos = glo_line = 1;
 	int token;
 	while (token = yylex())
 	{
 		switch (token)
 		{
-			case T_WHITESPACE:
-				cout << "T_WHITESPACE ";
-				while(*yytext != '\0')
-				{
-					if (*yytext == '\n')
-						cout << "\\n";
-					else 
-						cout << " ";
-					
-					*yytext++;
-				}
-				cout << endl;
-				break;
 			case T_EXTERN:
 				cout << "T_EXTERN " << yytext << endl;
+				break;
+			case T_CLASS:
+				cout << "T_CLASS " << yytext << endl;
 				break;
 			case T_VOID:
 				cout << "T_VOID " << yytext << endl;
@@ -250,24 +259,130 @@ int main()
 			case T_ID:
 				cout << "T_ID " << yytext << endl;
 				break;
+			case T_RETURN:
+				cout << "T_RETURN " << yytext << endl;
+				break;
 			case T_LPAREN:
 				cout << "T_LPAREN (" << endl;
 				break;
 			case T_RPAREN:
 				cout << "T_RPAREN )" << endl;
 				break;
+			case T_LCB:
+				cout << "T_LCB {" << endl;
+				break;
+			case T_RCB:
+				cout << "T_RCB }" << endl;
+				break;
+			case T_LSB:
+				cout << "T_LSB [" << endl;
+				break;
+			case T_RSB:
+				cout << "T_RSB ]" << endl;
+				break;
+			case T_COMMA:
+				cout << "T_COMMA ," << endl;
+				break;
+			case T_ASSIGN:
+				cout << "T_ASSIGN =" << endl;
+				break;
+			case T_PLUS:
+				cout << "T_PLUS +" << endl;
+				break;
+			case T_MINUS:
+				cout << "T_MINUS -" << endl;
+				break;
+			case T_MULT:
+				cout << "T_MULT *" << endl;
+				break;
+			case T_DIV:
+				cout << "T_DIV /" << endl;
+				break;
+			case T_MOD:
+				cout << "T_MOD %" << endl;
+				break;
+			case T_LEFTSHIFT:
+				cout << "T_LEFTSHIFT <<" << endl;
+				break;
+			case T_RIGHTSHIFT:
+				cout << "T_RIGHTSHIFT >>" << endl;
+				break;
+			case T_EQ:
+				cout << "T_EQ ==" << endl;
+				break;
+			case T_NEQ:
+				cout << "T_NEQ !=" << endl;
+				break;
+			case T_GEQ:
+				cout << "T_GEQ >=" << endl;
+				break;
+			case T_LEQ:
+				cout << "T_LEQ <=" << endl;
+				break;
+			case T_GT:
+				cout << "T_GT >" << endl;
+				break;
+			case T_LT:
+				cout << "T_LT <" << endl;
+				break;
+			case T_AND:
+				cout << "T_AND &&" << endl;
+				break;
+			case T_OR:
+				cout << "T_OR ||" << endl;
+				break;
+			case T_NOT:
+				cout << "T_NOT !" << endl;
+				break;
+			case T_TRUE:
+				cout << "T_TRUE true" << endl;
+				break;
+			case T_FALSE:
+				cout << "T_FALSE false" << endl;
+				break;
+			case T_WHILE:
+				cout << "T_WHILE while" << endl;
+				break;
+			case T_FOR:
+				cout << "T_FOR for" << endl;
+				break;
+			case T_IF:
+				cout << "T_IF if" << endl;
+				break;
+			case T_ELSE:
+				cout << "T_ELSE else" << endl;
+				break;
 			case T_SEMICOLON:
 				cout << "T_SEMICOLON ;" << endl;
+				break;
+			case T_COMMENT:
+				cout << "T_COMMENT " << str_comment << "\\n\n";
 				break;
 			case T_STRINGCONSTANT:
 				cout << "T_STRINGCONSTANT " << str_const << endl;
 				str_const.clear();
+				break;
+			case T_INTCONSTANT:
+				cout << "T_INTCONSTANT " << yytext << endl;
 				break;
 		}
 	}
 	return 0;
 }
 
+void count()
+{
+	for (int i = 0; yytext[i] != '\0'; i++)
+	{
+		if (yytext[i] = '\n')
+		{
+			glo_pos = 0;
+			glo_line++;
+		}
+		else
+			glo_pos += yyleng;
+	}
+}
 
 
 
