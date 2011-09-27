@@ -76,7 +76,10 @@
 extern "C"
 {
 	int yylex(void);
-	int yywrap(void);
+	int yywrap(void)
+	{
+		return -1;
+	}
 }
 
 using namespace std;
@@ -86,6 +89,8 @@ int glo_line;
 
 string str_const;
 string str_comment;
+
+void put_err_msg(const char* msg, int line, int pos);
 
 %}
 
@@ -182,28 +187,33 @@ extern {
 \"(\\.|[^\\"]|\n)*\" {
 	str_const = string(yytext);
 	str_const = str_const.substr(1, str_const.length() - 2);
-	
+
 	//Find any invalid escape sequences
 	for (int i = 0; i < str_const.length(); i++)
 	{
 		if (str_const[i] == '\\' && string("tvrnafb\\\"").find(str_const[i + 1]) == string::npos)
 		{
-			cerr << "Error: Unrecognized escape sequence in string constant" << endl;
-			cerr << "Lexical error: line " << glo_line << ", position " << (glo_pos + i) << endl;
+			put_err_msg("Error: Unrecognized escape sequence in string constant", glo_line, glo_pos + i);
+			return -1;
 		}
-		if (str_const[i] == '\n')
+		else if (str_const[i] == '\n')
 		{
 			glo_line++;
-			cerr << "Error: Newline in string constant" << endl;
-			cerr << "Lexical error: line " << glo_line << ", position " << glo_pos + i << endl;
+			put_err_msg("Error: Newline in string constant", glo_line, glo_pos + i);
+			return -1;
 		}
 	}
 	return T_STRINGCONSTANT;
 }
 
 \".*(\"|\\\").*\" {
-	cerr << "Error: unterminated string constant" << endl;
-	cerr << "Lexical error: line " << glo_line << ", position " << glo_pos << endl;
+	put_err_msg("Error: unterminated string constant", glo_line, glo_pos);
+	return -1;
+}
+
+\"(\\.|.)*\\\"*\" {
+	put_err_msg("String constant is missing closing delimiter", glo_line, glo_pos);
+	return -1;
 }
 
 '(\\.|[^\\'])*' {
@@ -212,18 +222,18 @@ extern {
 
 	if (strchar.length() > 1 && strchar[0] != '\\')
 	{
-		cerr << "Error: char constant length is greater than one" << endl;
-		cerr << "Lexical error: line " << glo_line << ", position " << glo_pos << endl;
+		put_err_msg("Error: char constant length is greater than one", glo_line, glo_pos);
+		return -1;
 	}
 	else if (strchar[0] == '\\' && string("tvrnafb\\\"").find(strchar[1]) == string::npos)
 	{
-		cerr << "Error: Unrecognized escape sequence in character constant" << endl;
-		cerr << "Lexical error: line " << glo_line << ", position " << glo_pos << endl;
+		put_err_msg("Error: Unrecognized escape sequence in character constant", glo_line, glo_pos);
+		return -1;
 	}
 	else if (strchar.length() == 0)
 	{
-		cerr << "Error: char constant has zero width" << endl;
-		cerr << "Lexical error: line " << glo_line << ", position " << glo_pos << endl;
+		put_err_msg("Error: char constant has zero width", glo_line, glo_pos);
+		return -1;
 	}
 	return T_CHARCONSTANT;
 }
@@ -239,14 +249,13 @@ extern {
 	
 	if (num > 2147483647 || num < -2147483647)
 	{
-		cerr << "Error: integer value out of range" << endl;
-		cerr << "Lexical error: line " << glo_line << ", position " << glo_pos - yyleng + 1 << endl;
+		put_err_msg("Error: integer value out of range", glo_line, glo_pos - yyleng + 1);
+		return -1;
 	}
-	
 	return T_INTCONSTANT;
 }
 
-[ \n]* { 
+[ \n\t\v\r\a\f\b]* { 
 	string strws = string(yytext);
 	cout << "T_WHITESPACE ";
 
@@ -403,11 +412,18 @@ int main()
 			case T_INTCONSTANT:
 				cout << "T_INTCONSTANT " << yytext << endl;
 				break;
+			default:
+				return 1;
 		}
 	}
-	return 0;
+	return 1;
 }
 
+void put_err_msg(const char* msg, int line, int pos)
+{
+	cerr << msg << endl;
+	cerr << "Lexical error: line " << line << ", position " << pos << endl;
+}
 
 
 
