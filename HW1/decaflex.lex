@@ -119,6 +119,7 @@ H			[a-fA-F0-9]
 \] { glo_pos += yyleng; return T_RSB; }
 ,  { glo_pos += yyleng; return T_COMMA; }
 ;	 { glo_pos += yyleng; return T_SEMICOLON; }
+\. { glo_pos += yyleng; return T_DOT; }
 
 "="  { glo_pos += yyleng; return T_ASSIGN; }
 "+" { glo_pos += yyleng; return T_PLUS; }
@@ -141,12 +142,15 @@ H			[a-fA-F0-9]
 "!"  { glo_pos += yyleng; return T_NOT; }
 true { glo_pos += yyleng; return T_TRUE; }
 false { glo_pos += yyleng; return T_FALSE; }
+null { glo_pos += yyleng; return T_NULL; }
 
 while { glo_pos += yyleng; return T_WHILE; }
 for { glo_pos += yyleng; return T_FOR; }
 if { glo_pos += yyleng; return T_IF; }
 else { glo_pos += yyleng; return T_ELSE; }
 
+new { glo_pos += yyleng; return T_NEW; }
+break { glo_pos += yyleng; return T_BREAK; }
 
 continue { glo_pos += yyleng; return T_CONTINUE; }
 return { glo_pos += yyleng; return T_RETURN; }
@@ -213,6 +217,11 @@ extern {
 
 \"(\\.|.)*\\\"*\" {
 	put_err_msg("String constant is missing closing delimiter", glo_line, glo_pos + 1);
+	return -1;
+}
+
+\\\".*\" {
+	put_err_msg("Unrecognized string formation", glo_line, glo_pos + 1);
 	return -1;
 }
 
@@ -289,6 +298,18 @@ int main()
 			case T_EXTERN:
 				cout << "T_EXTERN " << yytext << endl;
 				break;
+			case T_EXTENDS:
+				cout << "T_EXTENDS " << yytext << endl;
+				break;
+			case T_NEW:
+				cout << "T_NEW " << yytext << endl;
+				break;
+			case T_CONTINUE:
+				cout << "T_CONTINUE " << yytext << endl;
+				break;
+			case T_BREAK:
+				cout << "T_BREAK " << yytext << endl;
+				break;
 			case T_CLASS:
 				cout << "T_CLASS " << yytext << endl;
 				break;
@@ -330,6 +351,9 @@ int main()
 				break;
 			case T_COMMA:
 				cout << "T_COMMA ," << endl;
+				break;
+			case T_DOT:
+				cout << "T_DOT ." << endl;
 				break;
 			case T_ASSIGN:
 				cout << "T_ASSIGN =" << endl;
@@ -383,22 +407,25 @@ int main()
 				cout << "T_NOT !" << endl;
 				break;
 			case T_TRUE:
-				cout << "T_TRUE true" << endl;
+				cout << "T_TRUE " << yytext << endl;
 				break;
 			case T_FALSE:
-				cout << "T_FALSE false" << endl;
+				cout << "T_FALSE " << yytext << endl;
+				break;
+			case T_NULL:
+				cout << "T_NULL " << yytext << endl;
 				break;
 			case T_WHILE:
-				cout << "T_WHILE while" << endl;
+				cout << "T_WHILE " << yytext << endl;
 				break;
 			case T_FOR:
-				cout << "T_FOR for" << endl;
+				cout << "T_FOR " << yytext << endl;
 				break;
 			case T_IF:
-				cout << "T_IF if" << endl;
+				cout << "T_IF " << yytext  << endl;
 				break;
 			case T_ELSE:
-				cout << "T_ELSE else" << endl;
+				cout << "T_ELSE " << yytext << endl;
 				break;
 			case T_SEMICOLON:
 				cout << "T_SEMICOLON ;" << endl;
