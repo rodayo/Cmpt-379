@@ -107,6 +107,7 @@ H			[a-fA-F0-9]
 	str_comment.erase(str_comment.end() - 1);
 	
 	glo_line++;
+	glo_pos = 1;
 	return T_COMMENT;
 }
 
@@ -193,13 +194,12 @@ extern {
 	{
 		if (str_const[i] == '\\' && string("tvrnafb\\\"").find(str_const[i + 1]) == string::npos)
 		{
-			put_err_msg("Error: Unrecognized escape sequence in string constant", glo_line, glo_pos + i);
+			put_err_msg("Error: Unrecognized escape sequence in string constant", glo_line, glo_pos + i + 1);
 			return -1;
 		}
 		else if (str_const[i] == '\n')
 		{
-			glo_line++;
-			put_err_msg("Error: Newline in string constant", glo_line, glo_pos + i);
+			put_err_msg("Error: Newline in string constant", glo_line, glo_pos + i + 1);
 			return -1;
 		}
 	}
@@ -207,12 +207,12 @@ extern {
 }
 
 \".*(\"|\\\").*\" {
-	put_err_msg("Error: unterminated string constant", glo_line, glo_pos);
+	put_err_msg("Error: unterminated string constant", glo_line, glo_pos + 1);
 	return -1;
 }
 
 \"(\\.|.)*\\\"*\" {
-	put_err_msg("String constant is missing closing delimiter", glo_line, glo_pos);
+	put_err_msg("String constant is missing closing delimiter", glo_line, glo_pos + 1);
 	return -1;
 }
 
@@ -222,12 +222,12 @@ extern {
 
 	if (strchar.length() > 1 && strchar[0] != '\\')
 	{
-		put_err_msg("Error: char constant length is greater than one", glo_line, glo_pos);
+		put_err_msg("Error: char constant length is greater than one", glo_line, glo_pos + 1);
 		return -1;
 	}
 	else if (strchar[0] == '\\' && string("tvrnafb\\\"").find(strchar[1]) == string::npos)
 	{
-		put_err_msg("Error: Unrecognized escape sequence in character constant", glo_line, glo_pos);
+		put_err_msg("Error: Unrecognized escape sequence in character constant", glo_line, glo_pos + 1);
 		return -1;
 	}
 	else if (strchar.length() == 0)
@@ -265,9 +265,13 @@ extern {
 		{
 			cout << "\\n";
 			glo_line++;
+			glo_pos = 1;
 		}
 		else 
+		{
+			glo_pos++;
 			cout << strws[i];
+		}
 	}
 	cout << endl;
 }
